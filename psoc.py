@@ -2,7 +2,26 @@
 
 import time
 import serial
-ser = serial.Serial('/dev/ttyACM0', 57600)  # open serial port
+ser = serial.Serial('/dev/ttyACM0', 57600, timeout=1)  # open serial port
+
+
+def get_n_resp(ser, n):
+    insync = ser.read(1) # STK_INSYNC
+    # check received ack
+    if insync != '\x14':
+        print "read byte failed"
+        print repr(insync)
+        exit(1)
+    data = []
+    for i in range(0, n):
+        data.append(ser.read(1))
+
+    ok = ser.read(1) # STK_OK
+    if ok != '\x10':
+        print "read %d bytes failed" % n
+        print repr(ok)
+        exit(1)
+    return data
 
 def get_byte_resp(ser):
     insync = ser.read(1) # STK_INSYNC
@@ -29,6 +48,31 @@ def get_empty_resp(ser):
         print "Sync failed"
         print repr(insync)+" / "+repr(ok)
         exit(1)
+
+def write_reg(ser, reg, value):
+    ser.write("\x80"+chr(reg)+chr(value)+"\x20")
+    get_empty_resp(ser)
+
+def read_reg(ser, reg):
+    ser.write("\x79"+chr(reg)+"\x20")
+    return get_byte_resp(ser)
+
+def read_ram(ser, addr):
+    ser.write("\x81"+chr(addr)+"\x20")
+    return get_byte_resp(ser)
+
+def dump_ram(ser):
+    ram = []
+    for i in range(0, 256):
+        data = read_ram(ser, i)
+        ram.append(data)
+
+    with open('dump', 'wb+') as out:
+        out.write("".join(ram))
+
+def exec_opcodes(ser, opc):
+    ser.write("\x83"+opc+"\x20")
+    get_empty_resp(ser)
 
 # get in sync with the AVR
 print "syncing"
