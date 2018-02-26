@@ -68,17 +68,21 @@ def read_ram(ser, addr):
     ser.write("\x81"+chr(addr)+"\x20")
     return get_byte_resp(ser)
 
+def write_ram(ser, addr, value):
+    ser.write("\x82"+chr(addr)+chr(value)+"\x20")
+    get_empty_resp(ser)
+
 def dump_regs(ser):
-    for reg in range(0xF0, 0xF7):
+    for reg in range(0xF0, 0xFF):
         print "%2s [%02X] %02X " % (REGS[reg], reg, ord(read_reg(ser, reg)[0]))
 
-def dump_ram(ser):
+def dump_ram(ser, fname="dump"):
     ram = []
     for i in range(0, 256):
         data = read_ram(ser, i)
         ram.append(data)
 
-    with open('dump', 'wb+') as out:
+    with open(fname, 'wb+') as out:
         out.write("".join(ram))
 
 def exec_opcodes(ser, opc):
