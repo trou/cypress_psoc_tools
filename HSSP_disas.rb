@@ -51,7 +51,7 @@ def vect2str(v)
         case opc
             when "wrreg" then
                 if m[:arg1] =~ /[01]+/ then
-                    arg1 = $regtable[m[:arg1].to_i(2)]
+                    arg1 = "%s (%x)" % [$regtable[arg1_v], arg1_v]
                 end
             when "wrmem" then
                 arg1 = MEM_NAMES[arg1_v] if MEM_NAMES.has_key?(arg1_v)
