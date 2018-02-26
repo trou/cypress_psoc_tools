@@ -112,28 +112,57 @@ ser.write('\x20') # STK_CRC_EOP
 print "receiving sync ack"
 get_empty_resp(ser)
 
-time.sleep(0.1)
-print 'Entering prog mode'
-ser.write("\x50")
-res = ser.read(1)
-if res != "\x10":
-    print "failed"
-    exit(1)
-    
-time.sleep(0.1)
-print 'Reading Signature'
-ser.write("\x75\x20")
-sig = get_n_resp(ser, 2)
+while True:
+    time.sleep(0.1)
+    print 'Entering prog mode'
+    ser.write("\x50")
+    res = ser.read(1)
+    if res != "\x10":
+        print "failed"
+    else:
+        break
 
-print "Sig : %02X %02X" % (ord(sig[0]), ord(sig[1]))
-    
-print "setAddress(0)"
-for addr in range(0, 64, 64):
-    ser.write("\x55"+struct.pack(">H", addr)+"\x20")
-    get_empty_resp(ser)
-    res =  read_ram(ser,0xF8)
-    print "%04X: %02x" % (addr, ord(res[0]))
-dump_ram(ser)
+#time.sleep(0.1)
+#print 'Reading Signature'
+#ser.write("\x75\x20")
+#sig = get_n_resp(ser, 2)
+#
+#print "Sig : %02X %02X" % (ord(sig[0]), ord(sig[1]))
+#
+#print "setAddress(0)"
+#for addr in range(0, 64, 64): # Read block
+#    ser.write("\x55"+struct.pack(">H", addr)+"\x20")
+#    get_empty_resp(ser)
+#    res =  read_ram(ser,0xF8)
+#    print "%04X: %02x" % (addr, ord(res[0]))
+
+#dump_ram(ser, "ram_read")
+raw_input("fu")
+# Try to checksum
+ser.write("\x85")
+#ser.write("\x50")
+res = ser.read(1)
+#print repr(get_n_resp(ser, 2))
+dump_ram(ser, "ram_csum")
+exit(0)
+for i in range(0, 2):
+    print "checksum %d" % i
+    raw_input('fu')
+    write_reg(ser, 0xF7, 0x0) # CPU_F = 0
+    write_reg(ser, 0xF6, 0x0) # SP = 0
+    write_reg(ser, 0xF4, 0x3) # PCl
+    write_reg(ser, 0xF5, 0x0) # PCh
+    write_ram(ser, 0xFB, 0x80) # POINTER = 80
+    write_ram(ser, 0xF8, 0x3A) # KEY1 = 3A
+    write_ram(ser, 0xF9, 0x3) # KEY 2 = 3
+    write_ram(ser, 0xFA, i) # nb of blocks
+    write_ram(ser, 0xF0, 7) # a = 7
+    exec_opcodes(ser, "\x00\x30\x40")
+    exit(0)
+    ser.write("\x50")
+    res = ser.read(1)
+    dump_ram(ser, "ram_csum_%02x" % i)
+
 exit(0)
 
 # Read Addr 0 with ROMX
