@@ -5,6 +5,19 @@ import sys
 import time
 from random import randint
 import serial
+
+def hexdump(src, length=16, sep='.'):
+	FILTER = ''.join([(len(repr(chr(x))) == 3) and chr(x) or sep for x in range(256)])
+	lines = []
+	for c in xrange(0, len(src), length):
+		chars = src[c:c+length]
+		hex = ' '.join(["%02x" % ord(x) for x in chars])
+		if len(hex) > 24:
+			hex = "%s %s" % (hex[:24], hex[24:])
+		printable = ''.join(["%s" % ((ord(x) <= 127 and FILTER[ord(x)]) or sep) for x in chars])
+		lines.append("%08x:  %-*s  |%s|\n" % (c, length*3, hex, printable))
+	print ''.join(lines)
+
 ser = serial.Serial('/dev/ttyACM0', 57600, timeout=0.5)  # open serial port
 
 REGS = { 0xF0 : "A", 0xF1 : "F1",
@@ -64,9 +77,16 @@ def read_reg(reg):
     ser.write("\x79"+chr(reg)+"\x20")
     return get_byte_resp()
 
+def read_regb(reg):
+    return ord(read_reg(reg)[0])
+
 def read_ram(addr):
     ser.write("\x81"+chr(addr)+"\x20")
     return get_byte_resp()
+
+def read_ramb(addr):
+    return ord(read_ram(addr)[0])
+
 
 def write_ram(addr, value):
     ser.write("\x82"+chr(addr)+chr(value)+"\x20")
@@ -76,14 +96,33 @@ def dump_regs():
     for reg in range(0xF0, 0xFF):
         print "%2s [%02X] %02X " % (REGS[reg], reg, ord(read_reg(reg)[0]))
 
-def dump_ram(fname="dump"):
+def switch_ram_page(pg):
+    if pg == 1:
+        write_reg(0xF7, 0)
+        write_reg(0xD0, 0x1) # Set CUR_PP to 1
+        write_reg(0xD3, 0x1) # Set IDX_PP to 1
+        write_reg(0xD4, 0x1) # Set MVR_PP to 1
+        write_reg(0xF7, 0x80) # Set PgMode to CUR_PP / IDX_PP
+    else:
+        write_reg(0xF7, 0)
+
+def dump_ram(fname):
+    # Dump page 0
+    write_reg(0xF7, 0) # Set CPU_F to 0, so that page 0 is accessed
     ram = []
     for i in range(0, 256):
         data = read_ram(i)
         ram.append(data)
+    switch_ram_page(1)
+    for i in range(0, 256):
+        data = read_ram(i)
+        ram.append(data)
 
-    with open(fname, 'wb+') as out:
-        out.write("".join(ram))
+    if fname is not None:
+        with open(fname, 'wb+') as out:
+            out.write("".join(ram))
+    else:
+        hexdump(ram)
 
 def exec_opcodes(opc):
     ser.write("\x83"+opc+"\x20")
@@ -144,7 +183,9 @@ def read_0x80_data(addr, length):
     for i in range(0, length):
         data.append(ser.read(256))
 
-
+def run_checksum():
+    # Try to checksum
+    ser.write("\x85")
 # get in sync with the AVR
 print "syncing"
 ser.write('\x30') # STK_GET_SYNC
@@ -164,29 +205,15 @@ while True:
     else:
         break
 
-#dump_ram("ram_read")
-raw_input("fu")
-# Try to checksum
-ser.write("\x85")
-#ser.write("\x50")
-res = ser.read(1)
-#print repr(get_n_resp(2))
-dump_ram("ram_csum")
+
+dump_ram(None)
+for i in range(0, 0xFF):
+    write_ram(i, i)
+
+dump_ram(None)
 exit(0)
-for i in range(0, 2):
-    print "checksum %d" % i
-    raw_input('fu')
-    write_reg(0xF7, 0x0) # CPU_F = 0
-    write_reg(0xF6, 0x0) # SP = 0
-    write_reg(0xF4, 0x3) # PCl
-    write_reg(0xF5, 0x0) # PCh
-    write_ram(0xFB, 0x80) # POINTER = 80
-    write_ram(0xF8, 0x3A) # KEY1 = 3A
-    write_ram(0xF9, 0x3) # KEY 2 = 3
-    write_ram(0xFA, i) # nb of blocks
-    write_ram(0xF0, 7) # a = 7
-    exec_opcodes("\x00\x30\x40")
-    exit(0)
-    ser.write("\x50")
-    res = ser.read(1)
-    dump_ram("ram_csum_%02x" % i)
+
+# Read security
+ser.write("\x86")
+get_empty_resp()
+dump_ram(None)
