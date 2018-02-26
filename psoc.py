@@ -7,16 +7,16 @@ from random import randint
 import serial
 
 def hexdump(src, length=16, sep='.'):
-	FILTER = ''.join([(len(repr(chr(x))) == 3) and chr(x) or sep for x in range(256)])
-	lines = []
-	for c in xrange(0, len(src), length):
-		chars = src[c:c+length]
-		hex = ' '.join(["%02x" % ord(x) for x in chars])
-		if len(hex) > 24:
-			hex = "%s %s" % (hex[:24], hex[24:])
-		printable = ''.join(["%s" % ((ord(x) <= 127 and FILTER[ord(x)]) or sep) for x in chars])
-		lines.append("%08x:  %-*s  |%s|\n" % (c, length*3, hex, printable))
-	print ''.join(lines)
+    FILTER = ''.join([(len(repr(chr(x))) == 3) and chr(x) or sep for x in range(256)])
+    lines = []
+    for c in xrange(0, len(src), length):
+        chars = src[c:c+length]
+        hex = ' '.join(["%02x" % ord(x) for x in chars])
+        if len(hex) > 24:
+            hex = "%s %s" % (hex[:24], hex[24:])
+        printable = ''.join(["%s" % ((ord(x) <= 127 and FILTER[ord(x)]) or sep) for x in chars])
+        lines.append("%08x:  %-*s  |%s|\n" % (c, length*3, hex, printable))
+    print ''.join(lines)
 
 ser = serial.Serial('/dev/ttyACM0', 57600, timeout=0.5)  # open serial port
 
@@ -171,7 +171,7 @@ def read_block(addr):
     return res
 
 # Reads data from RAM @ 0x80
-def read_0x80_data(addr, length):
+def read_0x80_data(length):
     print "read page (0x74)"
     # Read 0x00 * 256 + 0x60 bytes
     # F == flash
@@ -180,16 +180,31 @@ def read_0x80_data(addr, length):
     if res == "\x11":
         print "failed"
         exit(1)
+    data = []
     for i in range(0, length):
         data.append(ser.read(256))
+    return data
+
+def read_security_data():
+    ser.write("\x86")
+    if get_byte_resp() != "\x00":
+        print "Reading security data failed"
+        exit(1)
+
+    data = []
+    for i in range(0x80, 0x80+32):
+        data.append(read_ramb(i))
+    sec_data = {0: 'unprotected', 1: 'read protect', 2: 'Disable external write', 3: 'Disable internal write'}
+    for i in range(0, 128):
+        print "block %02x : %s" % (i, sec_data[data[i*2/8]>>(6-(i%4)*2)&3])
+
 
 def run_checksum():
     # Try to checksum
     ser.write("\x85")
 # get in sync with the AVR
 print "syncing"
-ser.write('\x30') # STK_GET_SYNC
-ser.write('\x20') # STK_CRC_EOP
+ser.write('\x30\x20') # STK_GET_SYNC
 
 # receive sync ack
 print "receiving sync ack"
@@ -205,15 +220,6 @@ while True:
     else:
         break
 
+read_security_data()
 
-dump_ram(None)
-for i in range(0, 0xFF):
-    write_ram(i, i)
-
-dump_ram(None)
 exit(0)
-
-# Read security
-ser.write("\x86")
-get_empty_resp()
-dump_ram(None)
