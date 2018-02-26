@@ -5,7 +5,7 @@ import sys
 import time
 from random import randint
 import serial
-ser = serial.Serial('/dev/ttyACM0', 57600, timeout=1)  # open serial port
+ser = serial.Serial('/dev/ttyACM0', 57600, timeout=0.5)  # open serial port
 
 REGS = { 0xF0 : "A", 0xF1 : "F1",
 0xF2 : "F2", 0xF3 : "X", 0xF4 : "PC", 0xF5 : "PC", 0xF6 : "SP", 0xF7 :
