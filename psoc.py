@@ -242,19 +242,35 @@ def read_security_data():
 def cold_boot_step():
     print "Trying checksum & reset"
     # Try to checksum
-    for delay in range(0, 5000, 10):
-        reset_psoc(quiet=True)
-        send_vectors()
-        ser.write("\x85"+struct.pack(">H", delay))
+    last = [0, 0]
+    data = []
+    # Full checksum is 0.14s
+    for delay in range(20, 150000, 18):
+        while True:
+            try:
+                reset_psoc(quiet=True)
+                send_vectors()
+            except RuntimeError:
+                continue
+            else:
+                break
+        ser.write("\x85"+struct.pack(">I", delay))
         res = ser.read(1)
-        print "%d: %02X %02X" % (delay, read_ramb(0xF8), read_ramb(0xF9))
-
+        val = (read_ramb(0xF9) << 8) | read_ramb(0xF8)
+        data.append((val-last[0])&0xFF)
+        print "%d (+%d): %04X (+%02X) " % (delay, delay-last[1], val, val-last[0])
+        if last[0] != val:
+            last[0] = val
+            last[1] = delay
         #dump_ram("ram_csum_%05d" % delay)
+    with open("flash", 'wb+') as out:
+        out.write(bytearray(data))
+
     exit(0)
 
 sync_arduino()
-reset_psoc()
-send_vectors()
+#reset_psoc()
+#send_vectors()
 
 
 cold_boot_step()
