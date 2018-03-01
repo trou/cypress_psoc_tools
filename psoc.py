@@ -6,6 +6,13 @@ import time
 from random import randint
 import serial
 
+class SyncFailed(Exception):
+    pass
+
+def print_nocr(s):
+    print s,
+    sys.stdout.flush()
+
 def hexdump(src, length=16, sep='.'):
     FILTER = ''.join([(len(repr(chr(x))) == 3) and chr(x) or sep for x in range(256)])
     lines = []
@@ -65,9 +72,42 @@ def get_empty_resp():
 
     # check received ack
     if insync != '\x14' or ok != '\x10':
-        print "Sync failed"
-        print repr(insync)+" / "+repr(ok)
-        exit(1)
+        raise SyncFailed("%s, %s"% (repr(insync), repr(ok)))
+
+def sync_arduino():
+    print_nocr("syncing: ")
+    while True:
+        try:
+            # get in sync with the AVR
+            ser.write('\x30\x20') # STK_GET_SYNC
+            get_empty_resp()
+        except SyncFailed:
+            print_nocr("KO ")
+            pass
+        else:
+            print "OK"
+            break
+
+def reset_psoc(quiet=False):
+    while True:
+        if not quiet:
+            print_nocr('Resetting PSoC: ')
+        ser.write("\x49")
+        res = ser.read(1)
+        if res != "\x10":
+            if not quiet:
+                print_nocr("KO ")
+            continue
+        else:
+            if not quiet:
+                print "OK"
+            return
+
+def send_vectors():
+    ser.write("\x50")
+    res = get_byte_resp()
+    if res != "\x00":
+        raise RuntimeError("init failed")
 
 def write_reg(reg, value):
     ser.write("\x80"+chr(reg)+chr(value)+"\x20")
