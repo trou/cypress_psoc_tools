@@ -242,30 +242,20 @@ def read_security_data():
 def cold_boot_step():
     print "Trying checksum & reset"
     # Try to checksum
-    for delay in range(500, 5000, 2000):
+    for delay in range(0, 5000, 10):
+        reset_psoc(quiet=True)
+        send_vectors()
         ser.write("\x85"+struct.pack(">H", delay))
         res = ser.read(1)
         print "%d: %02X %02X" % (delay, read_ramb(0xF8), read_ramb(0xF9))
-        dump_ram("ram_csum_%05d" % delay)
+
+        #dump_ram("ram_csum_%05d" % delay)
     exit(0)
 
-# get in sync with the AVR
-print "syncing"
-ser.write('\x30\x20') # STK_GET_SYNC
+sync_arduino()
+reset_psoc()
+send_vectors()
 
-# receive sync ack
-print "receiving sync ack"
-get_empty_resp()
-
-while True:
-    time.sleep(0.1)
-    print 'Entering prog mode'
-    ser.write("\x50")
-    res = ser.read(1)
-    if res != "\x10":
-        print "failed"
-    else:
-        break
 
 cold_boot_step()
 #dump_ram("fullram_startup")
