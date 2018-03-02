@@ -3,6 +3,7 @@
 import struct
 import sys
 import time
+import os
 from random import randint
 import serial
 
@@ -25,7 +26,8 @@ def hexdump(src, length=16, sep='.'):
         lines.append("%08x:  %-*s  |%s|\n" % (c, length*3, hex, printable))
     print ''.join(lines)
 
-ser = serial.Serial('/dev/ttyACM0', 57600, timeout=0.5)  # open serial port
+global ser
+ser = serial.Serial('/dev/ttyACM0', 115200, timeout=0.5)  # open serial port
 
 REGS = { 0xF0 : "A", 0xF1 : "F1",
 0xF2 : "F2", 0xF3 : "X", 0xF4 : "PC", 0xF5 : "PC", 0xF6 : "SP", 0xF7 :
@@ -245,24 +247,22 @@ def cold_boot_step():
     last = [0, 0]
     data = []
     # Full checksum is 0.14s
-    for delay in range(20, 150000, 18):
-        while True:
-            try:
-                reset_psoc(quiet=True)
-                send_vectors()
-            except RuntimeError:
-                continue
-            else:
-                break
-        ser.write("\x85"+struct.pack(">I", delay))
-        res = ser.read(1)
-        val = (read_ramb(0xF9) << 8) | read_ramb(0xF8)
+    for delay in range(125000, 150000, 18):
+        try:
+            reset_psoc(quiet=True)
+            send_vectors()
+            ser.write("\x85"+struct.pack(">I", delay))
+            res = ser.read(1)
+            val = (read_ramb(0xF9) << 8) | read_ramb(0xF8)
+        except:
+            break
         data.append((val-last[0])&0xFF)
-        print "%d (+%d): %04X (+%02X) " % (delay, delay-last[1], val, val-last[0])
+        print "%d (+%d): %04X (+%02X) " % (delay, delay-last[1], val, (val-last[0])&0xFF)
         if last[0] != val:
             last[0] = val
             last[1] = delay
         #dump_ram("ram_csum_%05d" % delay)
+    print "Dumping"
     with open("flash", 'wb+') as out:
         out.write(bytearray(data))
 
@@ -273,6 +273,25 @@ sync_arduino()
 #send_vectors()
 
 
+for delay in range(0, 150000):
+    for i in range(0, 10):
+        try:
+            reset_psoc(quiet=True)
+            send_vectors()
+            ser.write("\x85"+struct.pack(">I", delay))
+            res = ser.read(1)
+        except Exception as e:
+            print e
+            ser.close()
+            os.system("timeout -s KILL 1s picocom -b 115200 /dev/ttyACM0 2>&1 > /dev/null")
+            ser = serial.Serial('/dev/ttyACM0', 115200, timeout=0.5)  # open serial port
+            continue
+        print "%05d %02X %02X %02X" % (delay, 
+                                       read_regb(0xf1), 
+                                       read_ramb(0xf8), 
+                                       read_ramb(0xf9))
+
+exit()
 cold_boot_step()
 #dump_ram("fullram_startup")
 #read_security_data()
