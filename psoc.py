@@ -268,38 +268,13 @@ def cold_boot_step():
 
     exit(0)
 
-def full_flash_dump():
-    for delay in range(0, 150000):
-        for i in range(0, 10):
-            try:
-                reset_psoc(quiet=True)
-                send_vectors()
-                ser.write("\x85"+struct.pack(">I", delay))
-                res = ser.read(1)
-            except Exception as e:
-                print e
-                ser.close()
-                os.system("timeout -s KILL 1s picocom -b 115200 /dev/ttyACM0 2>&1 > /dev/null")
-                ser = serial.Serial('/dev/ttyACM0', 115200, timeout=0.5)  # open serial port
-                continue
-            print "%05d %02X %02X %02X" % (delay,
-                                           read_regb(0xf1),
-                                           read_ramb(0xf8),
-                                           read_ramb(0xf9))
-
-def block_csum(numblocks=0):
-    ser.write("\x84"+chr(numblocks))
-    resp = get_n_resp(2)
-    return (ord(resp[1][0])<<8) | ord(resp[0][0])
-
-def dump_blocks_csums():
-    for i in range(1, 129):
-        print "block %03d : 0x%04X" % (i, block_csum(i))
+sync_arduino()
+#reset_psoc()
+#send_vectors()
 
 
-def csum_at(delay, count):
-    global ser
-    for i in range(0, count):
+for delay in range(0, 150000):
+    for i in range(0, 10):
         try:
             reset_psoc(quiet=True)
             send_vectors()
@@ -311,62 +286,14 @@ def csum_at(delay, count):
             os.system("timeout -s KILL 1s picocom -b 115200 /dev/ttyACM0 2>&1 > /dev/null")
             ser = serial.Serial('/dev/ttyACM0', 115200, timeout=0.5)  # open serial port
             continue
-    return read_ramb(0xF8)|(read_ramb(0xF9)<<8)
+        print "%05d %02X %02X %02X" % (delay, 
+                                       read_regb(0xf1), 
+                                       read_ramb(0xf8), 
+                                       read_ramb(0xf9))
 
-def dump_pin():
-    pin_map = {0x14: " ", 0x19: " ", 0x24: "0", 0x25: "1", 0x26: "2", 0x27:"3",
-               0x20: "4", 0x21: "5", 0x22: "6", 0x23: "7", 0x2c: "8", 0x2d: "9"}
-    last_csum = 0
-    pin_bytes = []
-    for delay in range(145495, 145719, 16):
-        csum = csum_at(delay, 1)
-        byte = (csum-last_csum)&0xFF
-        print "%05d %04x (%04x) => %02x" % (delay, csum, last_csum, byte)
-        pin_bytes.append(byte)
-        last_csum = csum
-    print "PIN: ",
-    for i in range(0, len(pin_bytes)):
-        if pin_bytes[i] in pin_map:
-            print pin_map[pin_bytes[i]],
-    print
+exit()
+cold_boot_step()
+#dump_ram("fullram_startup")
+#read_security_data()
 
-
-def sample_csum():
-    global ser
-
-    # block 125 checksum is at
-    # 144353 47E2 (old: 47B2, val: 30) <-- here
-    # 144368 4812 (old: 47E2, val: 30)
-    # go up to 145650 to have some room
-    #for delay in range(144333, 146850, 1):
-    for delay in range(145492, 146850, 1):
-        #for delta in range(-10, 10):
-        delta = 0
-        if True:
-            if delay+delta < 0:
-                continue
-            for i in range(0, 1):
-                try:
-                    reset_psoc(quiet=True)
-                    send_vectors()
-                    ser.write("\x85"+struct.pack(">I", delay+delta))
-                    res = ser.read(1)
-                except Exception as e:
-                    print e
-                    ser.close()
-                    os.system("timeout -s KILL 1s picocom -b 115200 /dev/ttyACM0 2>&1 > /dev/null")
-                    ser = serial.Serial('/dev/ttyACM0', 115200, timeout=0.5)  # open serial port
-                    continue
-                print "%05d %02X %02X %02X" % (delay+delta,
-                                               read_regb(0xf1),
-                                               read_ramb(0xf8),
-                                               read_ramb(0xf9))
-sync_arduino()
-reset_psoc()
-send_vectors()
-
-
-dump_pin()
-#sample_csum()
-#dump_blocks_csums()
-
+exit(0)
